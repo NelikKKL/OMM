@@ -27,8 +27,8 @@ canvas 3D модели
 ⡕⡑⣑⣈⣻⢗⢟⢞⢝⣻⣿⣿⣿⣿⣿⣿⣿⠸⣿⠿⠃⣿⣿⣿⣿⣿⣿⡿⠁⣠
 ⡝⡵⡈⢟⢕⢕⢕⢕⣵⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿⠿⠋⣀⣈⠙
 ⡝⡵⡕⡀⠑⠳⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠛⢉⡠⡲⡫⡪⡪⡣ 
-    
-  */
+*/
+
 class OmmModel extends HTMLElement {
     constructor() {
         super();
@@ -56,10 +56,8 @@ class OmmModel extends HTMLElement {
     }
 
     async loadContent() {
-        // Проверяем атрибут src или текст внутри тега
         let content = this.getAttribute('src') || this.textContent.trim();
         
-        // Если это путь к файлу (заканчивается на .omm)
         if (content.endsWith('.omm')) {
             try {
                 const response = await fetch(content);
@@ -73,7 +71,6 @@ class OmmModel extends HTMLElement {
                 console.error("OMM Error: Ошибка сети", e);
             }
         } else {
-            // Если внутри просто текст модели
             this.parse(content);
         }
 
@@ -97,19 +94,26 @@ class OmmModel extends HTMLElement {
             l = l.trim();
             if (!l || l.startsWith('//')) return;
             
-            if (l.startsWith('image3') || l.startsWith('cube3')) {
+            const match = l.match(/^(image3|cube3|pyramid3|triangle3|sphere3|cylinder3)/);
+            if (match) {
+                let typeStr = match[1];
                 let sy = 1;
                 if (l.includes(':')) sy = 1/parseFloat(l.split(':')[1]);
+                
                 current = { 
-                    type: l.startsWith('image3') ? 'image' : 'cube',
-                    x:0, y:0, z:0, s:50, sy, rx:0, ry:0, col:'200,200,200', tex:null 
+                    type: typeStr.replace('3', ''), 
+                    x:0, y:0, z:0, s:50, sy, rx:0, ry:0, col:'200,200,200', tex:null,
+                    ur:0, ul:0, ug:0, um:0, ud:0, uu:0 // Новые параметры вытягивания
                 };
                 this.objects.push(current);
             }
 
             if (current) {
                 const val = (k) => { const m = l.match(new RegExp(k + '\\((.*?)\\)')); return m ? m[1] : null; };
+                
                 const x = val('x'), y = val('y'), z = val('z'), s = val('scale'), rr = val('rr'), ru = val('ru'), c = val('color'), t = val('texture');
+                const ur = val('ur'), ul = val('ul'), ug = val('ug'), um = val('um'), ud = val('ud'), uu = val('uu');
+
                 if (x) current.x = parseFloat(x);
                 if (y) current.y = parseFloat(y);
                 if (z) current.z = parseFloat(z);
@@ -118,6 +122,14 @@ class OmmModel extends HTMLElement {
                 if (ru) current.rx = parseFloat(ru) * Math.PI/180;
                 if (c) current.col = c;
                 if (t) current.tex = this.getImg(t);
+                
+                // Считываем значения вытягивания
+                if (ur) current.ur = parseFloat(ur);
+                if (ul) current.ul = parseFloat(ul);
+                if (ug) current.ug = parseFloat(ug);
+                if (um) current.um = parseFloat(um);
+                if (ud) current.ud = parseFloat(ud);
+                if (uu) current.uu = parseFloat(uu);
             }
         });
         this.render();
@@ -176,38 +188,127 @@ class OmmModel extends HTMLElement {
     render() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.objects.sort((a,b) => b.z - a.z);
+        
         this.objects.forEach(obj => {
             const s = obj.s, sy = s * obj.sy;
+            let v = [], faces = [];
+
+            // 1. Генерация стандартных вершин
             if (obj.type === 'cube') {
-                const v = [{x:-s,y:-sy,z:-s},{x:s,y:-sy,z:-s},{x:s,y:sy,z:-s},{x:-s,y:sy,z:-s},
-                           {x:-s,y:-sy,z:s},{x:s,y:-sy,z:s},{x:s,y:sy,z:s},{x:-s,y:sy,z:s}];
-                const faces = [[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[0,3,7,4],[1,2,6,5]];
-                const pts = v.map(p => this.project(p, obj));
-                faces.forEach((f, i) => {
-                    const p1 = pts[f[0]], p2 = pts[f[1]], p3 = pts[f[2]], p4 = pts[f[3]];
-                    if ((p2.x-p1.x)*(p3.y-p1.y) - (p2.y-p1.y)*(p3.x-p1.x) < 0) {
-                        if (obj.tex && obj.tex.complete) {
-                            this.drawTexturedTriangle(p1, p2, p3, 0, 0, obj.tex.width, 0, obj.tex.width, obj.tex.height, obj.tex);
-                            this.drawTexturedTriangle(p1, p3, p4, 0, 0, obj.tex.width, obj.tex.height, 0, obj.tex.height, obj.tex);
-                        } else {
-                            this.ctx.beginPath();
-                            f.forEach((idx, j) => j==0 ? this.ctx.moveTo(pts[idx].x, pts[idx].y) : this.ctx.lineTo(pts[idx].x, pts[idx].y));
-                            this.ctx.closePath();
-                            const rgb = obj.col.split(',');
-                            const sh = 0.6 + (i * 0.1);
-                            this.ctx.fillStyle = `rgb(${rgb[0]*sh},${rgb[1]*sh},${rgb[2]*sh})`;
-                            this.ctx.fill();
-                        }
+                v = [{x:-s,y:-sy,z:-s},{x:s,y:-sy,z:-s},{x:s,y:sy,z:-s},{x:-s,y:sy,z:-s},
+                     {x:-s,y:-sy,z:s},{x:s,y:-sy,z:s},{x:s,y:sy,z:s},{x:-s,y:sy,z:s}];
+                faces = [[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[0,3,7,4],[1,2,6,5]];
+            } 
+            else if (obj.type === 'pyramid') {
+                v = [{x:0,y:-sy,z:0}, {x:-s,y:sy,z:-s}, {x:s,y:sy,z:-s}, {x:s,y:sy,z:s}, {x:-s,y:sy,z:s}];
+                faces = [[0,2,1], [0,3,2], [0,4,3], [0,1,4], [4,3,2,1]];
+            }
+            else if (obj.type === 'triangle') {
+                v = [{x:0,y:-sy,z:0}, {x:s,y:sy,z:0}, {x:-s,y:sy,z:0}];
+                faces = [[0,1,2]];
+            }
+            else if (obj.type === 'sphere') {
+                const latBands = 8, longBands = 8;
+                for (let lat=0; lat<=latBands; lat++) {
+                    let theta = lat*Math.PI/latBands, sinTheta=Math.sin(theta), cosTheta=Math.cos(theta);
+                    for (let lon=0; lon<=longBands; lon++) {
+                        let phi = lon*2*Math.PI/longBands, sinPhi=Math.sin(phi), cosPhi=Math.cos(phi);
+                        v.push({x: s*cosPhi*sinTheta, y: sy*cosTheta, z: s*sinPhi*sinTheta});
                     }
+                }
+                for (let lat=0; lat<latBands; lat++) {
+                    for (let lon=0; lon<longBands; lon++) {
+                        let first = (lat*(longBands+1))+lon, second = first+longBands+1;
+                        faces.push([first, second, first+1]);
+                        faces.push([second, second+1, first+1]);
+                    }
+                }
+            }
+            else if (obj.type === 'cylinder') {
+                const seg = 10;
+                for (let i=0; i<seg; i++) {
+                    let theta = (i/seg)*Math.PI*2;
+                    v.push({x: s*Math.cos(theta), y: -sy, z: s*Math.sin(theta)});
+                    v.push({x: s*Math.cos(theta), y: sy, z: s*Math.sin(theta)});
+                }
+                v.push({x:0, y:-sy, z:0});
+                v.push({x:0, y:sy, z:0});
+                const tc = v.length-2, bc = v.length-1;
+                for (let i=0; i<seg; i++) {
+                    let currTop = i*2, currBot = i*2+1;
+                    let nextTop = ((i+1)%seg)*2, nextBot = ((i+1)%seg)*2+1;
+                    faces.push([currTop, nextTop, nextBot, currBot]);
+                    faces.push([tc, currTop, nextTop]);
+                    faces.push([bc, nextBot, currBot]);
+                }
+            }
+            else if (obj.type === 'image') {
+                v = [{x:-s,y:-sy,z:0},{x:s,y:-sy,z:0},{x:s,y:sy,z:0},{x:-s,y:sy,z:0}];
+            }
+
+            // 2. Применяем асимметричное вытягивание (stretch)
+            const ur = obj.ur || 0, ul = obj.ul || 0;
+            const ug = obj.ug || 0, um = obj.um || 0;
+            const ud = obj.ud || 0, uu = obj.uu || 0;
+
+            if (ur || ul || ug || um || ud || uu) {
+                v.forEach(p => {
+                    // Вытягивание по X (Вправо / Влево)
+                    if (p.x > 0 && s) p.x = (p.x / s) * (s + ur);
+                    else if (p.x < 0 && s) p.x = (p.x / s) * (s + ul);
+                    
+                    // Вытягивание по Y (Вниз / Вверх)
+                    if (p.y > 0 && sy) p.y = (p.y / sy) * (sy + ud);
+                    else if (p.y < 0 && sy) p.y = (p.y / sy) * (sy + uu);
+                    
+                    // Вытягивание по Z (Вперед / Назад)
+                    if (p.z > 0 && s) p.z = (p.z / s) * (s + ug);
+                    else if (p.z < 0 && s) p.z = (p.z / s) * (s + um);
                 });
-            } else if (obj.type === 'image') {
-                const v = [{x:-s,y:-sy,z:0},{x:s,y:-sy,z:0},{x:s,y:sy,z:0},{x:-s,y:sy,z:0}];
+            }
+
+            // 3. Если это картинка, отрисовываем и переходим к следующему объекту
+            if (obj.type === 'image') {
                 const pts = v.map(p => this.project(p, obj));
                 if (obj.tex && obj.tex.complete) {
                     this.drawTexturedTriangle(pts[0], pts[1], pts[2], 0, 0, obj.tex.width, 0, obj.tex.width, obj.tex.height, obj.tex);
                     this.drawTexturedTriangle(pts[0], pts[2], pts[3], 0, 0, obj.tex.width, obj.tex.height, 0, obj.tex.height, obj.tex);
                 }
+                return;
             }
+
+            // 4. Отрисовка всех остальных 3D полигонов
+            const pts = v.map(p => this.project(p, obj));
+            faces.forEach((f, i) => {
+                const p1 = pts[f[0]], p2 = pts[f[1]], p3 = pts[f[2]];
+                
+                // Backface culling
+                const isVisible = (p2.x-p1.x)*(p3.y-p1.y) - (p2.y-p1.y)*(p3.x-p1.x) < 0;
+                
+                if (isVisible || obj.type === 'triangle') {
+                    if (obj.type === 'cube' && obj.tex && obj.tex.complete && f.length === 4) {
+                        const p4 = pts[f[3]];
+                        this.drawTexturedTriangle(p1, p2, p3, 0, 0, obj.tex.width, 0, obj.tex.width, obj.tex.height, obj.tex);
+                        this.drawTexturedTriangle(p1, p3, p4, 0, 0, obj.tex.width, obj.tex.height, 0, obj.tex.height, obj.tex);
+                    } else {
+                        this.ctx.beginPath();
+                        f.forEach((idx, j) => j===0 ? this.ctx.moveTo(pts[idx].x, pts[idx].y) : this.ctx.lineTo(pts[idx].x, pts[idx].y));
+                        this.ctx.closePath();
+                        
+                        const rgb = obj.col.split(',');
+                        let sh = 0.6;
+                        if (obj.type === 'sphere') sh = 0.4 + (i % 8) * 0.05;
+                        else if (obj.type === 'cylinder') sh = 0.5 + (i % 10) * 0.04;
+                        else sh = 0.6 + (i % faces.length * 0.08);
+
+                        this.ctx.fillStyle = `rgb(${Math.floor(rgb[0]*sh)},${Math.floor(rgb[1]*sh)},${Math.floor(rgb[2]*sh)})`;
+                        this.ctx.fill();
+                        
+                        this.ctx.strokeStyle = `rgba(0,0,0,0.15)`;
+                        this.ctx.stroke();
+                    }
+                }
+            });
         });
     }
 }
