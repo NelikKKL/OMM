@@ -15,6 +15,12 @@
    ```html
    <omm-model src="my_model.omm" autorate></omm-model>
    ```
+### <omm-model>
+в этот тег можно добавить так *` <omm-model src="model.omm"  сюда`
+
+можно добавить
+*`autorate` - модель сама крутиться
+*`freer` - полностю свободное вращение, уменьшение отдаление
 
 ---
 
