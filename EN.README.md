@@ -46,7 +46,7 @@ Parameters are written under the shape or on one line:
 You can specify several points
 Example
 * `animation(x0 y0 z0, x0 y200 z0)`
-you can only specify the desired value
++ you can only specify one desired value in the animation
 * `animation(y200 , y0)`
 can be used by rr and other
 
