@@ -36,7 +36,15 @@ Parameters are written under the shape or on one line:
 * `rr(deg)` — rotate right (around Y axis).
 * `ru(deg)` — rotate up (around X axis).
 
-### 3. Asymmetric Stretching
+### 3. Animation
+You can specify several points
+Example
+* `animation(x0 y0 z0, x0 y200 z0)`
+you can only specify the desired value
+* `animation(y200 , y0)`
+can be used by rr and other
+
+### 4. Asymmetric Stretching
 Allows deforming shapes by stretching sides (works for all types except `cube3`):
 * `ur(n)` — stretch right (X-axis).
 * `ul(n)` — stretch left (X-axis).
