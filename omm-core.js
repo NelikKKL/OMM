@@ -456,43 +456,53 @@ class OmmModel extends HTMLElement {
             }
 
             const pts = v.map(p => this.project(p, obj));
-            faces.forEach((f, i) => {
+            
+            // 1. Создаем массив полигонов и вычисляем их среднюю глубину (Z)
+            const sortedFaces = faces.map((f, i) => {
+                let zSum = 0;
+                for (let j = 0; j < f.length; j++) zSum += pts[f[j]].z;
+                return { f: f, i: i, z: zSum / f.length };
+            });
+
+            // 2. Сортируем от дальних к ближним (Painter's algorithm)
+            sortedFaces.sort((a, b) => b.z - a.z);
+
+            // 3. Отрисовываем полигоны в правильном порядке
+            sortedFaces.forEach(faceData => {
+                const f = faceData.f;
+                const i = faceData.i; // Сохраняем оригинальный индекс для вычисления теней
                 const p1 = pts[f[0]], p2 = pts[f[1]], p3 = pts[f[2]];
                 
-                const isVisible = (p2.x-p1.x)*(p3.y-p1.y) - (p2.y-p1.y)*(p3.x-p1.x) < 0;
-                
-                if (isVisible || obj.type === 'triangle') {
-                    if (obj.tex && obj.tex.complete) {
-                        const w = obj.tex.width;
-                        const h = obj.tex.height;
-                        
-                        if (f.length === 4) {
-                            const p4 = pts[f[3]];
-                            this.drawTexturedTriangle(p1, p2, p3, 0, 0, w, 0, w, h, obj.tex);
-                            this.drawTexturedTriangle(p1, p3, p4, 0, 0, w, h, 0, h, obj.tex);
-                        } else if (f.length === 3) {
-                            this.drawTexturedTriangle(p1, p2, p3, w/2, 0, w, h, 0, h, obj.tex);
-                        }
-                    } else {
-                        this.ctx.beginPath();
-                        f.forEach((idx, j) => j===0 ? this.ctx.moveTo(pts[idx].x, pts[idx].y) : this.ctx.lineTo(pts[idx].x, pts[idx].y));
-                        this.ctx.closePath();
-                        
-                        const rgb = obj.col.split(',');
-                        
-                        let sh = 1.0; 
-                        if (obj.type === 'sphere') sh = 0.8 + (i % 8) * 0.05;
-                        else if (obj.type === 'cylinder') sh = 0.85 + (i % 10) * 0.04;
-                        else sh = 0.85 + (i % faces.length * 0.05);
-                        
-                        sh = Math.min(1.0, sh);
-
-                        this.ctx.fillStyle = `rgb(${Math.floor(rgb[0]*sh)},${Math.floor(rgb[1]*sh)},${Math.floor(rgb[2]*sh)})`;
-                        this.ctx.fill();
-                        
-                        this.ctx.strokeStyle = `rgba(0,0,0,0.15)`;
-                        this.ctx.stroke();
+                if (obj.tex && obj.tex.complete) {
+                    const w = obj.tex.width;
+                    const h = obj.tex.height;
+                    
+                    if (f.length === 4) {
+                        const p4 = pts[f[3]];
+                        this.drawTexturedTriangle(p1, p2, p3, 0, 0, w, 0, w, h, obj.tex);
+                        this.drawTexturedTriangle(p1, p3, p4, 0, 0, w, h, 0, h, obj.tex);
+                    } else if (f.length === 3) {
+                        this.drawTexturedTriangle(p1, p2, p3, w/2, 0, w, h, 0, h, obj.tex);
                     }
+                } else {
+                    this.ctx.beginPath();
+                    f.forEach((idx, j) => j===0 ? this.ctx.moveTo(pts[idx].x, pts[idx].y) : this.ctx.lineTo(pts[idx].x, pts[idx].y));
+                    this.ctx.closePath();
+                    
+                    const rgb = obj.col.split(',');
+                    
+                    let sh = 1.0; 
+                    if (obj.type === 'sphere') sh = 0.8 + (i % 8) * 0.05;
+                    else if (obj.type === 'cylinder') sh = 0.85 + (i % 10) * 0.04;
+                    else sh = 0.85 + (i % faces.length * 0.05);
+                    
+                    sh = Math.min(1.0, sh);
+
+                    this.ctx.fillStyle = `rgb(${Math.floor(rgb[0]*sh)},${Math.floor(rgb[1]*sh)},${Math.floor(rgb[2]*sh)})`;
+                    this.ctx.fill();
+                    
+                    this.ctx.strokeStyle = `rgba(0,0,0,0.15)`;
+                    this.ctx.stroke();
                 }
             });
         });
